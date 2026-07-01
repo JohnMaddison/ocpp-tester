@@ -2,18 +2,19 @@ package httpserver
 
 import (
 	"context"
-	"fmt"
-	"html"
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/johnmaddison/ocpp-tester/internal/http-server/controller"
+	"github.com/johnmaddison/ocpp-tester/internal/http-server/service"
 )
 
-func StartHTTPServer(ctx context.Context) {
+func StartHTTPServer(ctx context.Context, sessionsService *service.SessionsService, ocpp16Service *service.OCPP16Service, ocppLogService *service.OCPPLogService) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/bar", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "Hello, %q", html.EscapeString(r.URL.Path))
-	})
+	controller.NewSessionsController(sessionsService).RegisterRoutes(mux)
+	controller.NewOCPP16Controller(ocpp16Service).RegisterRoutes(mux)
+	controller.NewOCPPLogController(ocppLogService).RegisterRoutes(mux)
 
 	server := &http.Server{
 		Addr:    ":8080",
@@ -32,7 +33,7 @@ func StartHTTPServer(ctx context.Context) {
 		}
 	}()
 
-	log.Print("Listening for HTTP traffic at 0.0.0.0:8080")
+	log.Print("Listening for HTTP traffic at http://0.0.0.0:8080")
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Printf("Failed to start HTTP server: %v", err)
 	}

@@ -8,15 +8,14 @@ import (
 	"sync"
 	"syscall"
 
-	httpserver "github.com/JohnMaddison/ocpp-tester/internal/http-server"
-	ocppserver "github.com/JohnMaddison/ocpp-tester/internal/ocpp-server"
-	"github.com/JohnMaddison/ocpp-tester/internal/ocppclients"
+	httpserver "github.com/johnmaddison/ocpp-tester/internal/http-server"
+	"github.com/johnmaddison/ocpp-tester/internal/http-server/data"
+	"github.com/johnmaddison/ocpp-tester/internal/http-server/service"
+	ocppserver "github.com/johnmaddison/ocpp-tester/internal/ocpp-server"
 )
 
 func main() {
 	log.Print("Starting...")
-
-	ocppclients.Init()
 
 	// Handle graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -31,14 +30,30 @@ func main() {
 		cancel()
 	}()
 
-	go ocppserver.StartOCPPServer(ctx)
+	sessionStore := data.NewSessionStore()
+	ocppLogStore, err := data.OpenOCPPLogStore(ctx, data.DefaultOCPPLogDBPath)
+	if err != nil {
+		log.Fatalf("Failed to open OCPP log database: %v", err)
+	}
+	defer func() {
+		if err := ocppLogStore.Close(); err != nil {
+			log.Printf("Failed to close OCPP log database: %v", err)
+		}
+	}()
+
+	sessionsService := service.NewSessionsService(sessionStore)
+	ocppLogService := service.NewOCPPLogService(ocppLogStore)
+	ocppServer := ocppserver.NewOCPPServer(sessionStore, ocppLogStore)
+	ocpp16Service := service.NewOCPP16Service(ocppServer)
+
+	go ocppserver.StartOCPPServer(ctx, ocppServer)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 
 	go func() {
 		defer wg.Done()
-		httpserver.StartHTTPServer(ctx)
+		httpserver.StartHTTPServer(ctx, sessionsService, ocpp16Service, ocppLogService)
 	}()
 
 	wg.Wait()

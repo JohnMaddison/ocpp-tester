@@ -16,6 +16,9 @@ build: vet
 run: vet
 	go run ./cmd/centralsystem/main.go -debug
 
+run-client: vet
+	go run ./cmd/test-client/main.go
+
 debug: vet
 	dlv debug ./cmd/centralsystem/main.go -- -debug
 
